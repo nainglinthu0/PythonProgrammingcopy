@@ -1,0 +1,153 @@
+I helped with making sure that we add the necessary concepts.
+I helped with debugging the codes.
+
+When we couldn’t generate the visual presentation of the game, Pone Nyet found pygame. This helped a lot with the project.
+Pone Nyet mostly generated codes
+
+import pygame
+import sys
+import random
+import math
+
+# Constants
+WIDTH, HEIGHT = 800, 600
+SPREAD_DISTANCE = 100
+INFECTION_THRESHOLD = 2
+NUM_COVID_STUDENTS_TO_SPREAD = 12
+NEAR_DISTANCE = 100  # Distance threshold for color change
+KICK_COOLDOWN = 10000  # 10 seconds cooldown for kicking (in milliseconds)
+
+# Colors
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+WHITE = (255, 255, 255)
+
+# Initialize Pygame
+pygame.init()
+
+# Create the screen
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("COVID-19 Spread Game")
+
+# Font for displaying information
+font = pygame.font.Font(None, 36)
+
+class Student(pygame.sprite.Sprite):
+    def __init__(self, x, y, color, speed):
+        super().__init__()
+        self.original_color = color
+        self.image = pygame.Surface((30, 30), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, color, (15, 15), 15)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.infected = False
+        self.interactions_needed = 0
+        self.speed = speed
+
+    def move(self):
+        self.rect.x += random.randint(-self.speed, self.speed)
+        self.rect.y += random.randint(-self.speed, self.speed)
+        self.rect.x = max(0, min(WIDTH - 30, self.rect.x))
+        self.rect.y = max(0, min(HEIGHT - 30, self.rect.y))
+
+    def interact(self, other_student):
+        distance = math.hypot(self.rect.x - other_student.rect.x, self.rect.y - other_student.rect.y)
+        if self.infected and not other_student.infected and distance < NEAR_DISTANCE:
+            other_student.infected = True
+            other_student.change_color(RED)
+
+    def kick(self):
+        self.kill()
+
+    def change_color(self, color):
+        self.image.fill(color)
+
+# Create sprite groups
+all_sprites = pygame.sprite.Group()
+
+# Create initial students
+for _ in range(11):
+    student = Student(random.randint(0, WIDTH - 30), random.randint(0, HEIGHT - 30), GREEN, speed=10)
+    all_sprites.add(student)
+
+# Create the initial COVID-positive student
+covid_student = Student(random.randint(0, WIDTH - 30), random.randint(0, HEIGHT - 30), RED, speed=10)
+covid_student.infected = True
+all_sprites.add(covid_student)
+
+
+# Main game loop
+clock = pygame.time.Clock()
+teacher_actions = 0
+start_time = pygame.time.get_ticks()
+
+running = True
+while running:
+    current_time = pygame.time.get_ticks()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            # Check if it's been 30 seconds since the last action
+            if current_time - start_time >= KICK_COOLDOWN:  # 30 seconds in milliseconds
+                pos = pygame.mouse.get_pos()
+                clicked_students = [student for student in all_sprites if student.rect.collidepoint(pos)]
+                for student in clicked_students:
+                    if student.infected:
+                        student.kick()
+                        print("Teacher kicked an infected student!")
+                        teacher_actions += 1
+                        start_time = current_time  # Reset the cooldown timer
+
+    # Check for interactions and change color
+    for student in all_sprites:
+        if student.infected:
+            for other_student in all_sprites:
+                if student != other_student:
+                    student.interact(other_student)
+
+    # Check if COVID has spread to the specified number of students
+    infected_count = sum(student.infected for student in all_sprites if isinstance(student, Student))
+    if infected_count >= NUM_COVID_STUDENTS_TO_SPREAD:
+        print("Game Over! COVID has spread to 12 students.")
+        running = False
+        break
+
+    # Check if all infected students are removed
+    if infected_count == 0:
+        print("Congratulations! All infected students are removed.")
+        running = False
+
+    # Move all students
+    for student in all_sprites:
+        student.move()
+
+    # Draw everything
+    screen.fill(WHITE)
+    all_sprites.draw(screen)
+
+    # Display information
+    text = font.render(f"Infected Count: {infected_count}", True, (0, 0, 0))
+    screen.blit(text, (10, 10))
+    text = font.render(f"Teacher Actions: {teacher_actions}", True, (0, 0, 0))
+    screen.blit(text, (10, 50))
+
+    # Display countdown timer
+    cooldown_seconds = max(0, (KICK_COOLDOWN - (current_time - start_time)) // 1000)
+    cooldown_text = font.render(f"Cooldown: {cooldown_seconds} seconds", True, (0, 0, 0))
+    screen.blit(cooldown_text, (10, 90))
+
+    # Check and display game over or congratulations messages
+    if not running:
+        if infected_count >= NUM_COVID_STUDENTS_TO_SPREAD:
+            game_over_text = font.render("Game Over!", True, (255, 0, 0))
+            screen.blit(game_over_text, (WIDTH // 2 - 100, HEIGHT // 2 - 50))
+        elif infected_count == 0:
+            congratulations_text = font.render("Congratulations!", True, (0, 255, 0))
+            screen.blit(congratulations_text, (WIDTH // 2 - 150, HEIGHT // 2 - 50))
+
+    pygame.display.flip()
+    clock.tick(10)
+
+pygame.quit()
+sys.exit()
